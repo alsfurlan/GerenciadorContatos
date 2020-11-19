@@ -12,12 +12,12 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     private SQLiteDatabase bancoDados;
-    private ArrayAdapter<String> adapter;
-    private final String NOME_BANCO_DADOS = "Contatos";
+    private ContatoAdapter adapter;
     private EditText campoNome;
     private EditText campoEmail;
     private EditText campoTelefone;
@@ -29,10 +29,8 @@ public class MainActivity extends AppCompatActivity {
 
         inicializarComponentes();
         criarConexaoBancoDados();
-        criarTabelas();
         listarContatos();
     }
-
 
     @Override
     protected void onDestroy() {
@@ -42,14 +40,12 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-
     private void inicializarComponentes() {
         campoNome = findViewById(R.id.nome);
         campoEmail = findViewById(R.id.email);
         campoTelefone = findViewById(R.id.telefone);
 
-
-        adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1);
+        adapter = new ContatoAdapter(this);
         ListView listView = findViewById(R.id.contatos);
         listView.setAdapter(adapter);
     }
@@ -57,59 +53,28 @@ public class MainActivity extends AppCompatActivity {
     private void criarConexaoBancoDados() {
         try {
             // Abertura da conexão
-            this.bancoDados = this.openOrCreateDatabase(NOME_BANCO_DADOS, MODE_PRIVATE, null);
+            bancoDados = this.openOrCreateDatabase(ConexaoBancoDados.NOME_BANCO_DADOS, MODE_PRIVATE, null);
+            ConexaoBancoDados conexao = new ConexaoBancoDados(bancoDados);
 
-            // Validação da existência/criação do banco de dados
-            File databasePath = getApplicationContext().getDatabasePath(NOME_BANCO_DADOS + ".db");
-            if(databasePath.exists()) {
-                mensagem("Conectado ao banco com sucesso!");
-            } else {
-                mensagem("Não foi possível acessar o banco de dados!");
-            }
+            ContatoDAO.criarTabela();
         } catch(Exception e) {
             mensagem("Erro ao conectar no banco de dados!");
             finish();
         }
     }
 
-    private void criarTabelas() {
-        String sql = new StringBuilder("")
-                .append("CREATE TABLE IF NOT EXISTS contatos (")
-                .append("   id INTEGER PRIMARY KEY,")
-                .append("   nome VARCHAR(250) NOT NULL,")
-                .append("   email VARCHAR(50) NOT NULL,")
-                .append("   telefone VARCHAR(25) NOT NULL")
-                .append(")")
-                .toString();
-
-        this.bancoDados.execSQL(sql);
-    }
-
-    private void listarContatos() {
-        Cursor cursor = this.bancoDados.rawQuery("SELECT nome, email, telefone FROM contatos", null);
-
+    public void listarContatos() {
+        // Limpar a lista
         adapter.clear();
-        if(cursor != null && cursor.getCount() > 0) {
-            // Índices
-            int iNome = cursor.getColumnIndex("nome");
-            int iEmail = cursor.getColumnIndex("email");
-            int iTelefone = cursor.getColumnIndex("telefone");
 
-            while(cursor.moveToNext()) {
-                String nome = cursor.getString(iNome);
-                String email = cursor.getString(iEmail);
-                String telefone = cursor.getString(iTelefone);
+        // Pego os contato do banco
+        List<Contato> contatos = ContatoDAO.listar();
 
-                String contato = new StringBuilder("Nome: ").append(nome).append("\n")
-                            .append("E-mail: ").append(email).append("\n")
-                            .append("Telefone: ").append(telefone).toString();
+        // Adicionar os contatos ao adapter
+        this.adapter.addAll(contatos);
 
-                this.adapter.add(contato);
-
-            }
-            this.adapter.notifyDataSetChanged();
-        }
-
+        // Notificar as mudanças de dados para o ListView
+        this.adapter.notifyDataSetChanged();
     }
 
     private void mensagem(String mensagem) {
@@ -117,18 +82,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void salvar(View view) {
+        // Pegar os dados preenchidos nos campos
         String nome = campoNome.getText().toString();
         String email = campoEmail.getText().toString();
         String telefone = campoTelefone.getText().toString();
 
-        String sql = new StringBuilder("INSERT INTO contatos(nome, email, telefone) VALUES (\"")
-                .append(nome).append("\", \"")
-                .append(email).append("\", \"")
-                .append(telefone).append("\")")
-                .toString();
+        // Criar objeto contato para salvar
+        Contato contato = new Contato(nome, email, telefone);
 
-        this.bancoDados.execSQL(sql);
+        // Salvar dados no banco
+        ContatoDAO.adicionar(contato);
+
+        // Limpar os campos para permitir novos cadastros
         this.limpar();
+
+        // Atualizar a lista de contatos
         this.listarContatos();
     }
 
